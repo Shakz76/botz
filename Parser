@@ -1,0 +1,47 @@
+$l = 1
+$joblist = 
+$jobnames=
+$joblist = @()
+$jobnames= @{}
+$schedules = (.\sqlite3.exe -csv Robots.dat "Select hex(ScheduleID) from Schedules")
+
+function schedparser{
+$sched = (.\sqlite3.exe -csv Robots.dat "Select ScheduleBody from Schedules where hex(ScheduleID) = 'D208AE16470E774B8255217375269723'")
+$isrecurring=($sched|Select-String Recurring) -replace '<[^>]+>',''
+$schtype = ($sched|Select-String ScheduleType) -replace '<[^>]+>',''
+
+if (!$isrecurring){
+    $schtype = ($sched|Select-String ScheduleType) -replace '<[^>]+>',''
+
+}
+else{
+    $time = ($sched|Select-String Time) -replace '<[^>]+>',''
+    $dateraw = ($sched|Select-String Date) -replace '<[^>]+>',''|select  -Skip 1
+    [string]$date = $dateraw
+    [string]$day = ($sched|Select-String DayOfWeek) -replace '<[^>]+>',''
+}
+}
+
+
+foreach ($schedule in $schedules) {
+    $jobids=(.\sqlite3.exe -csv Robots.dat "Select hex(JobID) from Schedules where hex(ScheduleId) = '$schedule'")
+    [string]$scheduledesc = (.\sqlite3.exe -csv Robots.dat "Select CustomDescription from Schedules where hex(ScheduleId) = '$schedule'"| % {$_ -replace '"',''})
+    schedparser
+ foreach ($jobid in $jobids){
+        $jobname = (.\sqlite3.exe -csv Robots.dat "Select Name from JobInfo where hex(ID) = '$jobid'")
+        $jobnames = New-Object PSObject -property @{
+
+            Num = ($l++)
+            ScheduleId = $schedule
+            BotName = $jobname
+            BotId = $jobid
+            Description = $scheduledesc
+            Time = $time.Trim()
+            Date = $date.Trim()
+            Type = $schtype.Trim()
+            Day = $day.Trim()
+   }
+ }
+    $joblist += $jobnames
+}
+$joblist|select-object Num,BotName,Description,Time,Date,Day|ConvertTo-Csv -NoTypeInformation| % {$_ -replace '"',''} 
